@@ -1,10 +1,11 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
-class MakeEmailNullableInUsersTable extends Migration
+return new class extends Migration
 {
     /**
      * Run the migrations.
@@ -13,9 +14,15 @@ class MakeEmailNullableInUsersTable extends Migration
      */
     public function up()
     {
-        // MySQL-specific; avoids doctrine/dbal requirement for change()
-        // Keep length at 191 to stay within index key limits on older MySQL setups
-        DB::statement('ALTER TABLE `users` MODIFY `email` VARCHAR(191) NULL');
+        if (config('database.default') === 'mysql') {
+            // MySQL: modify column
+            DB::statement('ALTER TABLE `users` MODIFY `email` VARCHAR(191) NULL');
+        } else {
+            // SQLite: workaround by recreating table
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('email', 191)->nullable()->change();
+            });
+        }
     }
 
     /**
@@ -25,7 +32,13 @@ class MakeEmailNullableInUsersTable extends Migration
      */
     public function down()
     {
-        // Note: this will fail if any rows have NULL email
-        DB::statement('ALTER TABLE `users` MODIFY `email` VARCHAR(191) NOT NULL');
+        if (config('database.default') === 'mysql') {
+            DB::statement('ALTER TABLE `users` MODIFY `email` VARCHAR(191) NOT NULL');
+        } else {
+            Schema::table('users', function (Blueprint $table) {
+                // SQLite: cannot reliably revert if NULL exists
+                // Skip or handle manually in dev
+            });
+        }
     }
-}
+};
